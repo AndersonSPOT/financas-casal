@@ -47,9 +47,9 @@ function getPaymentLabel(e) {
   if (!pm) return "";
   if (e.payment === "credito" && e.creditCard) {
     const cc = CREDIT_CARDS.find(c => c.id === e.creditCard);
-    return ${pm.emoji} ${pm.label} ${cc ? "(" + cc.label + ")" : ""};
+    return pm.emoji + " " + pm.label + " " + (cc ? "(" + cc.label + ")" : "");
   }
-  return ${pm.emoji} ${pm.label};
+  return pm.emoji + " " + pm.label;
 }
 
 export default function App() {
@@ -167,7 +167,7 @@ export default function App() {
   const byPayment = useMemo(() => {
     const map = {};
     filtered.filter(e => e.type === "expense" && e.payment).forEach(e => {
-      const key = e.payment === "credito" && e.creditCard ? credito_${e.creditCard} : e.payment;
+      const key = e.payment === "credito" && e.creditCard ? `credito_${e.creditCard}` : e.payment;
       map[key] = (map[key] || 0) + e.amount;
     });
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
@@ -198,7 +198,7 @@ export default function App() {
     if (key.startsWith("credito_")) {
       const ccId = key.replace("credito_", "");
       const cc = CREDIT_CARDS.find(c => c.id === ccId);
-      return { emoji: "💳", label: Crédito ${cc ? cc.label : ""}, color: "#7C6AF7" };
+      return { emoji: "💳", label: `Crédito ${cc ? cc.label : ""}`, color: "#7C6AF7" };
     }
     const pm = PAYMENT_METHODS.find(p => p.id === key);
     return pm || { emoji: "💳", label: key, color: "#888" };
@@ -271,7 +271,7 @@ export default function App() {
 
         {/* User filter */}
         <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-          {[["all","👥 Todos"], ["user1",🧑 ${userNames.user1}], ["user2",👩 ${userNames.user2}]].map(([id, label]) => (
+          {[["all","👥 Todos"], ["user1",`🧑 ${userNames.user1}`], ["user2",`👩 ${userNames.user2}`]].map(([id, label]) => (
             <button key={id} className="pill-btn" onClick={() => setFilterUser(id)}
               style={{ padding: "6px 14px", background: filterUser === id ? "#252530" : "none", color: filterUser === id ? "#F0EDE8" : "#555", border: filterUser === id ? "1px solid #333" : "1px solid transparent" }}>
               {label}
@@ -338,7 +338,7 @@ export default function App() {
                           <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 500, color: cat.color }}>{formatBRL(amount)}</span>
                         </div>
                         <div style={{ height: 4, background: "#252530", borderRadius: 2 }}>
-                          <div style={{ height: "100%", width: ${(amount / maxCat) * 100}%, background: cat.color, borderRadius: 2, transition: "width 0.5s" }} />
+                          <div style={{ height: "100%", width: `${(amount / maxCat) * 100}%`, background: cat.color, borderRadius: 2, transition: "width 0.5s" }} />
                         </div>
                       </div>
                     );
@@ -366,7 +366,7 @@ export default function App() {
                           <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 500, color: info.color }}>{formatBRL(amount)}</span>
                         </div>
                         <div style={{ height: 4, background: "#252530", borderRadius: 2 }}>
-                          <div style={{ height: "100%", width: ${(amount / maxPay) * 100}%, background: info.color, borderRadius: 2, transition: "width 0.5s" }} />
+                          <div style={{ height: "100%", width: `${(amount / maxPay) * 100}%`, background: info.color, borderRadius: 2, transition: "width 0.5s" }} />
                         </div>
                       </div>
                     );
@@ -389,7 +389,7 @@ export default function App() {
                     const pm   = e.payment ? PAYMENT_METHODS.find(p => p.id === e.payment) : null;
                     return (
                       <div key={e.id} className="row-item card" style={{ padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 38, height: 38, borderRadius: 10, background: ${cat.color}22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: 10, background: `${cat.color}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
                           {e.type === "income" ? "💵" : cat.emoji}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -419,7 +419,7 @@ export default function App() {
 
       {/* FAB */}
       <button className="add-btn" onClick={() => setShowForm(true)}
-        style={{ background: me?.color, boxShadow: 0 4px 20px ${me?.color}55 }}>＋</button>
+        style={{ background: me?.color, boxShadow: `0 4px 20px ${me?.color}55` }}>＋</button>
 
       {/* Add Modal */}
       {showForm && (
@@ -436,7 +436,7 @@ export default function App() {
                 <div key={t} className="type-option" onClick={() => setForm(f => ({ ...f, type: t }))}
                   style={{ background: form.type === t ? (t === "expense" ? "#FF6B6B22" : "#4ECDC422") : "none",
                     color: form.type === t ? (t === "expense" ? "#FF6B6B" : "#4ECDC4") : "#666",
-                    border: form.type === t ? 1px solid ${t === "expense" ? "#FF6B6B44" : "#4ECDC444"} : "1px solid transparent" }}>
+                    border: form.type === t ? `1px solid ${t === "expense" ? "#FF6B6B44" : "#4ECDC444"}` : "1px solid transparent" }}>
                   {label}
                 </div>
               ))}
@@ -457,8 +457,8 @@ export default function App() {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {PAYMENT_METHODS.map(pm => (
                       <div key={pm.id} onClick={() => setForm(f => ({ ...f, payment: pm.id }))}
-                        style={{ padding: "10px 12px", borderRadius: 10, cursor: "pointer", border: 1px solid ${form.payment === pm.id ? pm.color : "#252530"},
-                          background: form.payment === pm.id ? ${pm.color}18 : "#0C0C14",
+                        style={{ padding: "10px 12px", borderRadius: 10, cursor: "pointer", border: `1px solid ${form.payment === pm.id ? pm.color : "#252530"}`,
+                          background: form.payment === pm.id ? `${pm.color}18` : "#0C0C14",
                           color: form.payment === pm.id ? pm.color : "#666", fontSize: 13, fontWeight: 500,
                           display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s" }}>
                         <span>{pm.emoji}</span> {pm.label}
@@ -474,7 +474,7 @@ export default function App() {
                         {CREDIT_CARDS.map(cc => (
                           <div key={cc.id} onClick={() => setForm(f => ({ ...f, creditCard: cc.id }))}
                             style={{ padding: "10px 12px", borderRadius: 10, cursor: "pointer",
-                              border: 1px solid ${form.creditCard === cc.id ? "#7C6AF7" : "#252530"},
+                              border: `1px solid ${form.creditCard === cc.id ? "#7C6AF7" : "#252530"}`,
                               background: form.creditCard === cc.id ? "#7C6AF718" : "#0C0C14",
                               color: form.creditCard === cc.id ? "#7C6AF7" : "#666", fontSize: 13, fontWeight: 500,
                               display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s" }}>
@@ -510,7 +510,7 @@ export default function App() {
                 <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ fontSize: 20 }}>{u.avatar}</span>
                   <input className="form-input" value={editNames[u.id]} onChange={e => setEditNames(n => ({ ...n, [u.id]: e.target.value }))}
-                    placeholder={Nome do perfil ${i + 1}} style={{ flex: 1 }} />
+                    placeholder={`Nome do perfil ${i + 1}`} style={{ flex: 1 }} />
                 </div>
               ))}
               <button onClick={handleSaveNames}
@@ -550,8 +550,7 @@ const styles = {
   loginWrap: { fontFamily: "'DM Sans', sans-serif", minHeight: "100vh", background: "#0C0C14", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, color: "#F0EDE8" },
   label: { fontSize: 12, color: "#555", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 },
   input: { width: "100%", background: "#17171F", border: "1px solid #252530", borderRadius: 12, color: "#F0EDE8", padding: "12px 16px", fontFamily: "inherit", fontSize: 14, outline: "none" },
-  userCard: (color) => ({ width: "100%", background: "#17171F", border: 1px solid ${color}44, borderRadius: 14, padding: "16px 20px", marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 14, transition: "all 0.2s", fontFamily: "inherit" }),
-  avatar: (color) => ({ width: 44, height: 44, borderRadius: "50%", background: ${color}22, border: 2px solid ${color}, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }),
+  userCard: (color) => ({ width: "100%", background: "#17171F", border: `1px solid ${color}44`, borderRadius: 14, padding: "16px 20px", marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 14, transition: "all 0.2s", fontFamily: "inherit" }),
+  avatar: (color) => ({ width: 44, height: 44, borderRadius: "50%", background: `${color}22`, border: `2px solid ${color}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }),
   iconBtn: { background: "#17171F", border: "1px solid #252530", borderRadius: 10, padding: "8px 12px", color: "#888", cursor: "pointer", fontSize: 16, fontFamily: "inherit" },
   errorBanner: { background: "#FF6B6B22", border: "1px solid #FF6B6B44", color: "#FF6B6B", padding: "10px 16px", textAlign: "center", fontSize: 13 },
-};
