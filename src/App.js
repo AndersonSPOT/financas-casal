@@ -554,3 +554,4 @@ const styles = {
   avatar: (color) => ({ width: 44, height: 44, borderRadius: "50%", background: `${color}22`, border: `2px solid ${color}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }),
   iconBtn: { background: "#17171F", border: "1px solid #252530", borderRadius: 10, padding: "8px 12px", color: "#888", cursor: "pointer", fontSize: 16, fontFamily: "inherit" },
   errorBanner: { background: "#FF6B6B22", border: "1px solid #FF6B6B44", color: "#FF6B6B", padding: "10px 16px", textAlign: "center", fontSize: 13 },
+};
