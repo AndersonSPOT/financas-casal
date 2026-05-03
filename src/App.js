@@ -23,11 +23,33 @@ const USERS = [
   { id: "user2", color: "#F75A8C", avatar: "👩" },
 ];
 
+const PAYMENT_METHODS = [
+  { id: "debito",   label: "Débito",        emoji: "💳", color: "#4ECDC4" },
+  { id: "credito",  label: "Crédito",       emoji: "💳", color: "#7C6AF7" },
+  { id: "refeicao", label: "Vale Refeição", emoji: "🍱", color: "#F0A500" },
+  { id: "alelo",    label: "Alelo Car",     emoji: "🚗", color: "#96CEB4" },
+];
+
+const CREDIT_CARDS = [
+  { id: "c6",     label: "C6 Bank", emoji: "⬛" },
+  { id: "outros", label: "Outros",  emoji: "💳" },
+];
+
 function formatBRL(v) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 function getToday() {
   return new Date().toISOString().split("T")[0];
+}
+function getPaymentLabel(e) {
+  if (!e.payment) return "";
+  const pm = PAYMENT_METHODS.find(p => p.id === e.payment);
+  if (!pm) return "";
+  if (e.payment === "credito" && e.creditCard) {
+    const cc = CREDIT_CARDS.find(c => c.id === e.creditCard);
+    return ${pm.emoji} ${pm.label} ${cc ? "(" + cc.label + ")" : ""};
+  }
+  return ${pm.emoji} ${pm.label};
 }
 
 export default function App() {
@@ -37,7 +59,7 @@ export default function App() {
   const [loading, setLoading]           = useState(true);
   const [connected, setConnected]       = useState(true);
 
-  const [form, setForm] = useState({ desc: "", amount: "", category: "alimentacao", date: getToday(), type: "expense" });
+  const [form, setForm] = useState({ desc: "", amount: "", category: "alimentacao", date: getToday(), type: "expense", payment: "debito", creditCard: "c6" });
   const [activeTab, setActiveTab]       = useState("dashboard");
   const [filterMonth, setFilterMonth]   = useState(new Date().getMonth());
   const [filterYear]                    = useState(new Date().getFullYear());
@@ -47,7 +69,6 @@ export default function App() {
   const [editNames, setEditNames]       = useState({ user1: "", user2: "" });
   const [setupName, setSetupName]       = useState("");
 
-  // Load names from Firestore
   useEffect(() => {
     const load = async () => {
       try {
@@ -61,7 +82,6 @@ export default function App() {
     load();
   }, []);
 
-  // Real-time listener for expenses
   useEffect(() => {
     if (!currentUser) return;
     setLoading(true);
@@ -94,13 +114,21 @@ export default function App() {
   async function handleAdd() {
     if (!form.desc || !form.amount) return;
     try {
-      await addDoc(collection(db, "expenses"), {
+      const data = {
         ...form,
         amount: parseFloat(form.amount),
         userId: currentUser,
         createdAt: new Date().toISOString(),
-      });
-      setForm({ desc: "", amount: "", category: "alimentacao", date: getToday(), type: "expense" });
+      };
+      if (form.type !== "expense") {
+        delete data.payment;
+        delete data.creditCard;
+      }
+      if (form.payment !== "credito") {
+        delete data.creditCard;
+      }
+      await addDoc(collection(db, "expenses"), data);
+      setForm({ desc: "", amount: "", category: "alimentacao", date: getToday(), type: "expense", payment: "debito", creditCard: "c6" });
       setShowForm(false);
     } catch (e) { console.error(e); }
   }
@@ -136,6 +164,15 @@ export default function App() {
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [filtered]);
 
+  const byPayment = useMemo(() => {
+    const map = {};
+    filtered.filter(e => e.type === "expense" && e.payment).forEach(e => {
+      const key = e.payment === "credito" && e.creditCard ? credito_${e.creditCard} : e.payment;
+      map[key] = (map[key] || 0) + e.amount;
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [filtered]);
+
   const splitSummary = useMemo(() => {
     const r = { user1: { income: 0, expense: 0 }, user2: { income: 0, expense: 0 } };
     expenses.filter(e => {
@@ -153,19 +190,25 @@ export default function App() {
   const getCat  = id => CATEGORIES.find(c => c.id === id) || CATEGORIES[7];
   const getUser = id => USERS.find(u => u.id === id);
   const maxCat  = byCategory.length ? byCategory[0][1] : 1;
+  const maxPay  = byPayment.length ? byPayment[0][1] : 1;
   const me      = currentUser ? USERS.find(u => u.id === currentUser) : null;
   const myName  = currentUser ? userNames[currentUser] : "";
 
-  // ── LOGIN SCREEN ────────────────────────────────────────────────
+  function getPaymentInfo(key) {
+    if (key.startsWith("credito_")) {
+      const ccId = key.replace("credito_", "");
+      const cc = CREDIT_CARDS.find(c => c.id === ccId);
+      return { emoji: "💳", label: Crédito ${cc ? cc.label : ""}, color: "#7C6AF7" };
+    }
+    const pm = PAYMENT_METHODS.find(p => p.id === key);
+    return pm || { emoji: "💳", label: key, color: "#888" };
+  }
+
   if (!currentUser) {
     return (
       <div style={styles.loginWrap}>
         <style>{BASE_CSS}</style>
-        {!connected && (
-          <div style={styles.errorBanner}>
-            ⚠️ Erro ao conectar no Firebase. Verifique o <strong>firebaseConfig.js</strong>
-          </div>
-        )}
+        {!connected && <div style={styles.errorBanner}>⚠️ Erro ao conectar no Firebase.</div>}
         <div style={{ fontSize: 52, marginBottom: 16 }}>💑</div>
         <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 6 }}>Finanças do Casal</h1>
         <p style={{ color: "#666", fontSize: 14, marginBottom: 32 }}>Controle compartilhado em tempo real</p>
@@ -194,14 +237,10 @@ export default function App() {
     );
   }
 
-  // ── MAIN APP ────────────────────────────────────────────────────
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", minHeight: "100vh", background: "#0C0C14", color: "#F0EDE8" }}>
       <style>{BASE_CSS}</style>
-
-      {!connected && (
-        <div style={styles.errorBanner}>⚠️ Sem conexão com Firebase</div>
-      )}
+      {!connected && <div style={styles.errorBanner}>⚠️ Sem conexão com Firebase</div>}
 
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "20px 20px 0" }}>
 
@@ -215,8 +254,7 @@ export default function App() {
             <h1 style={{ fontSize: 20, fontWeight: 700 }}>Olá, {myName} {me?.avatar}</h1>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => { setEditNames({ ...userNames }); setShowSettings(true); }}
-              style={styles.iconBtn}>⚙️</button>
+            <button onClick={() => { setEditNames({ ...userNames }); setShowSettings(true); }} style={styles.iconBtn}>⚙️</button>
             <button onClick={() => setCurrentUser(null)} style={{ ...styles.iconBtn, fontSize: 12 }}>Trocar</button>
           </div>
         </div>
@@ -233,7 +271,7 @@ export default function App() {
 
         {/* User filter */}
         <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-          {[["all","👥 Todos"], ["user1",`🧑 ${userNames.user1}`], ["user2",`👩 ${userNames.user2}`]].map(([id, label]) => (
+          {[["all","👥 Todos"], ["user1",🧑 ${userNames.user1}], ["user2",👩 ${userNames.user2}]].map(([id, label]) => (
             <button key={id} className="pill-btn" onClick={() => setFilterUser(id)}
               style={{ padding: "6px 14px", background: filterUser === id ? "#252530" : "none", color: filterUser === id ? "#F0EDE8" : "#555", border: filterUser === id ? "1px solid #333" : "1px solid transparent" }}>
               {label}
@@ -271,9 +309,9 @@ export default function App() {
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 4, background: "#1a1a22", borderRadius: 12, padding: 4, marginBottom: 20 }}>
-          {[["dashboard","📊 Categorias"], ["list","📋 Lançamentos"]].map(([id, label]) => (
+          {[["dashboard","📊 Categorias"], ["pagamentos","💳 Pagamentos"], ["list","📋 Lançamentos"]].map(([id, label]) => (
             <button key={id} className="tab-btn" onClick={() => setActiveTab(id)}
-              style={{ flex: 1, padding: "9px", borderRadius: 9, fontSize: 13, fontWeight: 500,
+              style={{ flex: 1, padding: "9px 4px", borderRadius: 9, fontSize: 12, fontWeight: 500,
                 background: activeTab === id ? me?.color : "none",
                 color: activeTab === id ? "#fff" : "#666" }}>
               {label}
@@ -281,7 +319,7 @@ export default function App() {
           ))}
         </div>
 
-        {/* Dashboard */}
+        {/* Dashboard - Categorias */}
         {activeTab === "dashboard" && (
           <div style={{ paddingBottom: 80 }}>
             {loading
@@ -300,7 +338,35 @@ export default function App() {
                           <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 500, color: cat.color }}>{formatBRL(amount)}</span>
                         </div>
                         <div style={{ height: 4, background: "#252530", borderRadius: 2 }}>
-                          <div style={{ height: "100%", width: `${(amount / maxCat) * 100}%`, background: cat.color, borderRadius: 2, transition: "width 0.5s" }} />
+                          <div style={{ height: "100%", width: ${(amount / maxCat) * 100}%, background: cat.color, borderRadius: 2, transition: "width 0.5s" }} />
+                        </div>
+                      </div>
+                    );
+                  })
+            }
+          </div>
+        )}
+
+        {/* Pagamentos */}
+        {activeTab === "pagamentos" && (
+          <div style={{ paddingBottom: 80 }}>
+            {loading
+              ? <div className="card" style={{ padding: 24, textAlign: "center", color: "#555" }}>Carregando...</div>
+              : byPayment.length === 0
+                ? <div className="card" style={{ padding: 24, textAlign: "center", color: "#555", fontSize: 14 }}>Nenhum gasto em {MONTHS[filterMonth]}</div>
+                : byPayment.map(([key, amount]) => {
+                    const info = getPaymentInfo(key);
+                    return (
+                      <div key={key} className="card" style={{ padding: "14px 16px", marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 18 }}>{info.emoji}</span>
+                            <span style={{ fontSize: 14, fontWeight: 500 }}>{info.label}</span>
+                          </div>
+                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 500, color: info.color }}>{formatBRL(amount)}</span>
+                        </div>
+                        <div style={{ height: 4, background: "#252530", borderRadius: 2 }}>
+                          <div style={{ height: "100%", width: ${(amount / maxPay) * 100}%, background: info.color, borderRadius: 2, transition: "width 0.5s" }} />
                         </div>
                       </div>
                     );
@@ -320,9 +386,10 @@ export default function App() {
                     const cat  = getCat(e.category);
                     const user = getUser(e.userId);
                     const d    = new Date(e.date + "T00:00:00");
+                    const pm   = e.payment ? PAYMENT_METHODS.find(p => p.id === e.payment) : null;
                     return (
                       <div key={e.id} className="row-item card" style={{ padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 38, height: 38, borderRadius: 10, background: `${cat.color}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: 10, background: ${cat.color}22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
                           {e.type === "income" ? "💵" : cat.emoji}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -331,6 +398,7 @@ export default function App() {
                             {d.getDate().toString().padStart(2,"0")}/{(d.getMonth()+1).toString().padStart(2,"0")} ·{" "}
                             <span style={{ color: user?.color }}>{user?.avatar} {userNames[e.userId]}</span>
                             {" · "}{e.type === "income" ? "Entrada" : cat.label}
+                            {pm && <span style={{ color: pm.color }}> · {getPaymentLabel(e)}</span>}
                           </p>
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -351,7 +419,7 @@ export default function App() {
 
       {/* FAB */}
       <button className="add-btn" onClick={() => setShowForm(true)}
-        style={{ background: me?.color, boxShadow: `0 4px 20px ${me?.color}55` }}>＋</button>
+        style={{ background: me?.color, boxShadow: 0 4px 20px ${me?.color}55 }}>＋</button>
 
       {/* Add Modal */}
       {showForm && (
@@ -361,16 +429,19 @@ export default function App() {
               <h2 style={{ fontSize: 18, fontWeight: 700 }}>Novo lançamento <span style={{ color: me?.color }}>({myName})</span></h2>
               <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 20 }}>×</button>
             </div>
+
+            {/* Tipo */}
             <div className="type-toggle" style={{ marginBottom: 14 }}>
               {[["expense","💸 Gasto"], ["income","💵 Entrada"]].map(([t, label]) => (
                 <div key={t} className="type-option" onClick={() => setForm(f => ({ ...f, type: t }))}
                   style={{ background: form.type === t ? (t === "expense" ? "#FF6B6B22" : "#4ECDC422") : "none",
                     color: form.type === t ? (t === "expense" ? "#FF6B6B" : "#4ECDC4") : "#666",
-                    border: form.type === t ? `1px solid ${t === "expense" ? "#FF6B6B44" : "#4ECDC444"}` : "1px solid transparent" }}>
+                    border: form.type === t ? 1px solid ${t === "expense" ? "#FF6B6B44" : "#4ECDC444"} : "1px solid transparent" }}>
                   {label}
                 </div>
               ))}
             </div>
+
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <input className="form-input" placeholder="Descrição" value={form.desc} onChange={e => setForm(f => ({ ...f, desc: e.target.value }))} />
               <input className="form-input" placeholder="Valor (R$)" type="number" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
@@ -378,6 +449,44 @@ export default function App() {
                 {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
               </select>
               <input className="form-input" type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+
+              {/* Forma de pagamento — só para gastos */}
+              {form.type === "expense" && (
+                <>
+                  <p style={{ fontSize: 12, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase", marginTop: 4 }}>Forma de pagamento</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {PAYMENT_METHODS.map(pm => (
+                      <div key={pm.id} onClick={() => setForm(f => ({ ...f, payment: pm.id }))}
+                        style={{ padding: "10px 12px", borderRadius: 10, cursor: "pointer", border: 1px solid ${form.payment === pm.id ? pm.color : "#252530"},
+                          background: form.payment === pm.id ? ${pm.color}18 : "#0C0C14",
+                          color: form.payment === pm.id ? pm.color : "#666", fontSize: 13, fontWeight: 500,
+                          display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s" }}>
+                        <span>{pm.emoji}</span> {pm.label}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Bandeira do cartão — só para crédito */}
+                  {form.payment === "credito" && (
+                    <>
+                      <p style={{ fontSize: 12, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase" }}>Cartão de crédito</p>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        {CREDIT_CARDS.map(cc => (
+                          <div key={cc.id} onClick={() => setForm(f => ({ ...f, creditCard: cc.id }))}
+                            style={{ padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                              border: 1px solid ${form.creditCard === cc.id ? "#7C6AF7" : "#252530"},
+                              background: form.creditCard === cc.id ? "#7C6AF718" : "#0C0C14",
+                              color: form.creditCard === cc.id ? "#7C6AF7" : "#666", fontSize: 13, fontWeight: 500,
+                              display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s" }}>
+                            <span>{cc.emoji}</span> {cc.label}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
               <button onClick={handleAdd}
                 style={{ background: me?.color, color: "#fff", border: "none", borderRadius: 12, padding: 13, fontFamily: "inherit", fontSize: 15, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>
                 Adicionar
@@ -401,7 +510,7 @@ export default function App() {
                 <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ fontSize: 20 }}>{u.avatar}</span>
                   <input className="form-input" value={editNames[u.id]} onChange={e => setEditNames(n => ({ ...n, [u.id]: e.target.value }))}
-                    placeholder={`Nome do perfil ${i + 1}`} style={{ flex: 1 }} />
+                    placeholder={Nome do perfil ${i + 1}} style={{ flex: 1 }} />
                 </div>
               ))}
               <button onClick={handleSaveNames}
@@ -416,7 +525,6 @@ export default function App() {
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────
 const BASE_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -430,7 +538,7 @@ const BASE_CSS = `
   .form-input { width: 100%; background: #0C0C14; border: 1px solid #252530; border-radius: 10px; color: #F0EDE8; padding: 10px 14px; font-family: inherit; font-size: 14px; transition: border-color 0.2s; }
   .form-input:focus { border-color: #7C6AF7; }
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: flex-end; justify-content: center; z-index: 200; backdrop-filter: blur(4px); }
-  .modal-sheet { background: #17171F; border: 1px solid #252530; border-radius: 24px 24px 0 0; padding: 28px 24px 32px; width: 100%; max-width: 480px; animation: slideUp 0.3s ease; }
+  .modal-sheet { background: #17171F; border: 1px solid #252530; border-radius: 24px 24px 0 0; padding: 28px 24px 32px; width: 100%; max-width: 480px; animation: slideUp 0.3s ease; max-height: 90vh; overflow-y: auto; }
   @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
   .type-toggle { display: flex; background: #0C0C14; border-radius: 10px; padding: 4px; gap: 4px; }
   .type-option { flex: 1; text-align: center; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; }
@@ -442,8 +550,8 @@ const styles = {
   loginWrap: { fontFamily: "'DM Sans', sans-serif", minHeight: "100vh", background: "#0C0C14", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, color: "#F0EDE8" },
   label: { fontSize: 12, color: "#555", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 },
   input: { width: "100%", background: "#17171F", border: "1px solid #252530", borderRadius: 12, color: "#F0EDE8", padding: "12px 16px", fontFamily: "inherit", fontSize: 14, outline: "none" },
-  userCard: (color) => ({ width: "100%", background: "#17171F", border: `1px solid ${color}44`, borderRadius: 14, padding: "16px 20px", marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 14, transition: "all 0.2s", fontFamily: "inherit" }),
-  avatar: (color) => ({ width: 44, height: 44, borderRadius: "50%", background: `${color}22`, border: `2px solid ${color}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }),
+  userCard: (color) => ({ width: "100%", background: "#17171F", border: 1px solid ${color}44, borderRadius: 14, padding: "16px 20px", marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 14, transition: "all 0.2s", fontFamily: "inherit" }),
+  avatar: (color) => ({ width: 44, height: 44, borderRadius: "50%", background: ${color}22, border: 2px solid ${color}, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }),
   iconBtn: { background: "#17171F", border: "1px solid #252530", borderRadius: 10, padding: "8px 12px", color: "#888", cursor: "pointer", fontSize: 16, fontFamily: "inherit" },
   errorBanner: { background: "#FF6B6B22", border: "1px solid #FF6B6B44", color: "#FF6B6B", padding: "10px 16px", textAlign: "center", fontSize: 13 },
 };
